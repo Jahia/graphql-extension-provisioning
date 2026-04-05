@@ -25,18 +25,6 @@ mutation {
 }
 ```
 
-#### Execute a provisioning script from a file
-Provide the absolute path to a YAML provisioning script file on the server:
-```graphql
-mutation {
-    admin {
-        jahia {
-            executeScriptFromFile(filePath: "/path/to/provisioning-script.yaml")
-        }
-    }
-}
-```
-
 ## Provisioning script format
 
 Jahia provisioning scripts are written in YAML. Example:
