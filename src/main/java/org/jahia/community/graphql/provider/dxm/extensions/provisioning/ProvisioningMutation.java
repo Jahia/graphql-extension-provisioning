@@ -16,6 +16,9 @@ public class ProvisioningMutation {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProvisioningMutation.class);
 
+    private ProvisioningMutation() {
+    }
+
     @GraphQLField
     @GraphQLDescription("Execute a YAML provisioning script provided as a string")
     @GraphQLRequiresPermission("provisioningApi")
