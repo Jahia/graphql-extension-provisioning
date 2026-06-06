@@ -13,6 +13,9 @@ TESTS_IMAGE=${TESTS_IMAGE:-jahia/graphql-extension-provisioning:latest}
 MODULE_ID=${MODULE_ID:-graphql-extension-provisioning}
 MANIFEST=${MANIFEST:-provisioning-manifest-snapshot.yml}
 JAHIA_URL=${JAHIA_URL:-http://jahia:8080}
-SUPER_USER_PASSWORD=${SUPER_USER_PASSWORD:-root1234}
+if [[ -z "${SUPER_USER_PASSWORD}" ]]; then
+  echo "ERROR: SUPER_USER_PASSWORD environment variable is not set. Set it before running tests." >&2
+  exit 1
+fi
 JAHIA_LICENSE=${JAHIA_LICENSE:-""}
 JAHIA_HOST=${JAHIA_HOST:-jahia}
