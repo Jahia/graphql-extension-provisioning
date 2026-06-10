@@ -39,6 +39,9 @@ public class ProvisioningMutation {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProvisioningMutation.class);
 
+    /** Format identifier passed to {@link ProvisioningManager#executeScript(String, String)}. */
+    private static final String SCRIPT_FORMAT_YAML = "yaml";
+
     private ProvisioningMutation() {
     }
 
@@ -48,13 +51,17 @@ public class ProvisioningMutation {
     public static Boolean executeScript(
             @GraphQLName("script") @GraphQLDescription("YAML provisioning script content") String script
     ) {
+        if (script == null || script.trim().isEmpty()) {
+            LOGGER.error("Provisioning script is null or blank; nothing to execute");
+            return Boolean.FALSE;
+        }
         final ProvisioningManager provisioningManager = BundleUtils.getOsgiService(ProvisioningManager.class, null);
         if (provisioningManager == null) {
             LOGGER.error("ProvisioningManager OSGi service is unavailable; cannot execute provisioning script");
             return Boolean.FALSE;
         }
         try {
-            provisioningManager.executeScript(script, "yaml");
+            provisioningManager.executeScript(script, SCRIPT_FORMAT_YAML);
             return Boolean.TRUE;
         } catch (IllegalArgumentException ex) {
             LOGGER.error("Provisioning script failed YAML parse/validation: {}", ex.getMessage(), ex);
