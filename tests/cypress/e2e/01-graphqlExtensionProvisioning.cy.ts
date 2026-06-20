@@ -13,7 +13,7 @@ describe('GraphQL Extension Provisioning', () => {
             mutation: executeScript,
             variables: {script}
         })
-            .its('data.admin.jahia.executeScript')
+            .its('data.admin.jahia.provisioning.executeScript')
             .should('eq', true);
     });
 
@@ -23,7 +23,7 @@ describe('GraphQL Extension Provisioning', () => {
             mutation: executeScript,
             variables: {script}
         })
-            .its('data.admin.jahia.executeScript')
+            .its('data.admin.jahia.provisioning.executeScript')
             .should('eq', false);
     });
 
@@ -36,7 +36,7 @@ describe('GraphQL Extension Provisioning', () => {
             mutation: executeScript,
             variables: {script}
         })
-            .its('data.admin.jahia.executeScript')
+            .its('data.admin.jahia.provisioning.executeScript')
             .should('eq', true);
     });
 });

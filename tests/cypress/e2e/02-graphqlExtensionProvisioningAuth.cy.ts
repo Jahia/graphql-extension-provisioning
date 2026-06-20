@@ -3,7 +3,7 @@ describe('GraphQL Extension Provisioning - Authorization', () => {
     // NOT executed when the caller lacks the provisioningApi permission.
     const script = '- karafCommand: "log:log \'graphql-extension-provisioning auth-test — MUST NOT RUN\'"'
 
-    const query = 'mutation ($script: String!) { admin { jahia { executeScript(script: $script) } } }'
+    const query = 'mutation ($script: String!) { admin { jahia { provisioning { executeScript(script: $script) } } } }'
 
     it('does not execute the provisioning script for an unauthenticated caller', () => {
         // Send a raw, unauthenticated POST (cy.apollo defaults to root credentials,
@@ -19,7 +19,7 @@ describe('GraphQL Extension Provisioning - Authorization', () => {
             if (res.status === 200) {
                 // GraphQL reached: the privileged mutation must be refused, so the
                 // field must NOT return true and an error must be present.
-                const executed = res.body?.data?.admin?.jahia?.executeScript
+                const executed = res.body?.data?.admin?.jahia?.provisioning?.executeScript
                 expect(executed, 'anonymous caller must not run the script').to.not.equal(true)
                 expect(res.body?.errors, 'a GraphQL authorization error is expected')
                     .to.be.an('array')

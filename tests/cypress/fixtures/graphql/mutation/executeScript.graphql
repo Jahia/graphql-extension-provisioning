@@ -1,7 +1,9 @@
 mutation ExecuteScript($script: String!) {
     admin {
         jahia {
-            executeScript(script: $script)
+            provisioning {
+                executeScript(script: $script)
+            }
         }
     }
 }
