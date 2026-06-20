@@ -14,14 +14,16 @@ shell access to the server.**
 ### The `provisioningApi` permission
 
 Access is gated by `@GraphQLRequiresPermission("provisioningApi")`. This is a **custom
-Jahia permission** that must be explicitly declared in the JCR and then granted to one
-or more roles — it is **not** a built-in Jahia permission and grants **no access by
-default** until you create and assign it.
+Jahia permission** that is **shipped by this module** — it is created automatically in
+the JCR at path `/permissions/graphql/provisioningApi` when the module is first deployed
+(or when it is deployed with a new version). It grants **no access by default** until
+you assign it to one or more roles.
 
-#### Declaring the permission in JCR
+#### Declaring the permission in JCR (manual fallback)
 
-Add the following node under `/permissions` (e.g. via a module's `repository.xml` import
-or through the Jahia Administration > JCR Browser):
+If you need to create the permission manually (e.g. for an older deployment where the
+import has not run), add the following node under `/permissions` via the Jahia
+Administration > JCR Browser:
 
 ```xml
 <permissions jcr:primaryType="jnt:permission">
@@ -90,3 +92,24 @@ Jahia provisioning scripts are written in YAML. Example:
 ```
 
 Refer to the [Jahia Provisioning API documentation](https://academy.jahia.com/documentation/developer/jahia/8/jahia-provisioning-api) for the full list of supported operations.
+
+## Module architecture
+
+| Class | Role |
+|-------|------|
+| `DXGraphQLExtensionProvisioningProvider` | OSGi DS `@Component` that registers `ProvisioningMutation` with the DXM GraphQL provider via `DXGraphQLExtensionsProvider` |
+| `ProvisioningMutation` | `@GraphQLTypeExtension(GqlJahiaAdminMutation.class)` — adds the `executeScript` field under `admin.jahia` |
+
+## Troubleshooting
+
+### `executeScript` returns `false` immediately without running the script
+
+**Cause:** The `ProvisioningManager` OSGi service was unavailable at call time (e.g. the
+Jahia provisioning bundle is not started, or the OSGi framework was still initialising).
+
+**Resolution:**
+1. Confirm the `org.jahia.services.provisioning` bundle is in `Active` state in the Karaf
+   console (`bundle:list | grep provisioning`).
+2. If the bundle is present but not active, start it: `bundle:start <id>`.
+3. Retry the mutation. The lookup is attempted on every call, so no module restart is
+   required once the service becomes available.

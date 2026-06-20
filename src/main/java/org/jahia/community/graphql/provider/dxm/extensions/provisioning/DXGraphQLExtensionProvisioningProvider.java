@@ -26,14 +26,14 @@ package org.jahia.community.graphql.provider.dxm.extensions.provisioning;
 import org.jahia.modules.graphql.provider.dxm.DXGraphQLExtensionsProvider;
 import org.osgi.service.component.annotations.Component;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 
 @Component(service = DXGraphQLExtensionsProvider.class, immediate = true)
 public class DXGraphQLExtensionProvisioningProvider implements DXGraphQLExtensionsProvider {
 
     @Override
     public Collection<Class<?>> getExtensions() {
-        return Arrays.<Class<?>>asList(ProvisioningMutation.class);
+        return Collections.singletonList(ProvisioningMutation.class);
     }
 }

@@ -32,7 +32,6 @@ import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -72,6 +71,16 @@ public class ProvisioningMutationTest {
     }
 
     @Test
+    public void executeScript_emptyStringScript_returnsFalseWithoutTouchingService() {
+        try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
+            Boolean result = ProvisioningMutation.executeScript("");
+
+            assertThat(result).isFalse();
+            bundleUtils.verifyNoInteractions();
+        }
+    }
+
+    @Test
     public void executeScript_unavailableProvisioningManager_returnsFalse() {
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
@@ -84,9 +93,21 @@ public class ProvisioningMutationTest {
     }
 
     @Test
+    public void executeScript_osgiLookupThrows_returnsFalse() {
+        try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
+            bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
+                    .thenThrow(new RuntimeException("OSGi framework not ready"));
+
+            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+
+            assertThat(result).isFalse();
+        }
+    }
+
+    @Test
     public void executeScript_validScript_executesAsYamlAndReturnsTrue() throws Exception {
         ProvisioningManager manager = mock(ProvisioningManager.class);
-        doNothing().when(manager).executeScript(eq(VALID_SCRIPT), eq("yaml"));
+        doNothing().when(manager).executeScript(VALID_SCRIPT, "yaml");
 
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
@@ -103,7 +124,7 @@ public class ProvisioningMutationTest {
     public void executeScript_invalidYaml_returnsFalseAndDoesNotSwallowSilently() throws Exception {
         ProvisioningManager manager = mock(ProvisioningManager.class);
         doThrow(new IllegalArgumentException("bad yaml"))
-                .when(manager).executeScript(any(String.class), eq("yaml"));
+                .when(manager).executeScript(any(String.class), any(String.class));
 
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
@@ -119,7 +140,7 @@ public class ProvisioningMutationTest {
     public void executeScript_runtimeIoFailure_returnsFalse() throws Exception {
         ProvisioningManager manager = mock(ProvisioningManager.class);
         doThrow(new IOException("network down"))
-                .when(manager).executeScript(any(String.class), eq("yaml"));
+                .when(manager).executeScript(any(String.class), any(String.class));
 
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
