@@ -40,7 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link ProvisioningMutation#executeScript(String)}.
+ * Unit tests for {@link ProvisioningAdminMutation#executeScript(String)}.
  *
  * <p>Uses JUnit 4 ({@code org.junit.Test}) because the jahia-modules parent pins the
  * surefire-junit4 provider; a JUnit 5 test would compile but silently run 0 tests.</p>
@@ -52,7 +52,7 @@ public class ProvisioningMutationTest {
     @Test
     public void executeScript_nullScript_returnsFalseWithoutTouchingService() {
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
-            Boolean result = ProvisioningMutation.executeScript(null);
+            Boolean result = new ProvisioningAdminMutation().executeScript(null);
 
             assertThat(result).isFalse();
             // Validation short-circuits before any OSGi lookup.
@@ -63,7 +63,7 @@ public class ProvisioningMutationTest {
     @Test
     public void executeScript_blankScript_returnsFalseWithoutTouchingService() {
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
-            Boolean result = ProvisioningMutation.executeScript("   \n\t ");
+            Boolean result = new ProvisioningAdminMutation().executeScript("   \n\t ");
 
             assertThat(result).isFalse();
             bundleUtils.verifyNoInteractions();
@@ -73,7 +73,7 @@ public class ProvisioningMutationTest {
     @Test
     public void executeScript_emptyStringScript_returnsFalseWithoutTouchingService() {
         try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
-            Boolean result = ProvisioningMutation.executeScript("");
+            Boolean result = new ProvisioningAdminMutation().executeScript("");
 
             assertThat(result).isFalse();
             bundleUtils.verifyNoInteractions();
@@ -86,7 +86,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenReturn(null);
 
-            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+            Boolean result = new ProvisioningAdminMutation().executeScript(VALID_SCRIPT);
 
             assertThat(result).isFalse();
         }
@@ -98,7 +98,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenThrow(new RuntimeException("OSGi framework not ready"));
 
-            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+            Boolean result = new ProvisioningAdminMutation().executeScript(VALID_SCRIPT);
 
             assertThat(result).isFalse();
         }
@@ -113,7 +113,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenReturn(manager);
 
-            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+            Boolean result = new ProvisioningAdminMutation().executeScript(VALID_SCRIPT);
 
             assertThat(result).isTrue();
             verify(manager).executeScript(VALID_SCRIPT, "yaml");
@@ -130,7 +130,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenReturn(manager);
 
-            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+            Boolean result = new ProvisioningAdminMutation().executeScript(VALID_SCRIPT);
 
             assertThat(result).isFalse();
         }
@@ -146,7 +146,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenReturn(manager);
 
-            Boolean result = ProvisioningMutation.executeScript(VALID_SCRIPT);
+            Boolean result = new ProvisioningAdminMutation().executeScript(VALID_SCRIPT);
 
             assertThat(result).isFalse();
         }
@@ -160,7 +160,7 @@ public class ProvisioningMutationTest {
             bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
                     .thenReturn(manager);
 
-            ProvisioningMutation.executeScript("");
+            new ProvisioningAdminMutation().executeScript("");
 
             verify(manager, never()).executeScript(any(String.class), any(String.class));
         }
