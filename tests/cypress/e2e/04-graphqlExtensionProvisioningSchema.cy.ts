@@ -44,10 +44,16 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         }
     `;
 
+    // F3: the module ships src/main/import/permissions.xml nesting provisioningApi UNDER a
+    // `graphql` group node, but Jahia registers module permissions FLAT by name at runtime —
+    // the live node is /permissions/provisioningApi (parent /permissions), and no
+    // /permissions/graphql grouping node is created (confirmed live in Stage 6). The module's
+    // own template copy lives under /modules/<module>/<version>/permissions/graphql/provisioningApi,
+    // but the effective, grantable permission is the flattened /permissions/provisioningApi.
     const permissionNode = gql`
         query {
             jcr(workspace: EDIT) {
-                nodeByPath(path: "/permissions/graphql/provisioningApi") {
+                nodeByPath(path: "/permissions/provisioningApi") {
                     name
                     primaryNodeType { name }
                     parent { name primaryNodeType { name } }
@@ -118,18 +124,19 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         });
     });
 
-    it('F3 — the module import created /permissions/graphql/provisioningApi (both nodes jnt:permission)', () => {
+    it('F3 — the module registered a grantable provisioningApi permission at /permissions/provisioningApi (jnt:permission)', () => {
         cy.apollo({query: permissionNode, errorPolicy: 'all'})
             .then((result: {
                 data?: {jcr?: {nodeByPath?: {name: string; primaryNodeType: {name: string}; parent: {name: string; primaryNodeType: {name: string}}}}};
-                errors?: unknown[];
+                errors?: Array<{message: string}>;
             }) => {
-                expect(result.errors ?? [], 'permission node lookup must not error').to.have.length(0);
+                expect(result.errors ?? [], `permission node lookup must not error [${(result.errors ?? []).map(e => e.message).join(' | ')}]`)
+                    .to.have.length(0);
                 const node = result.data?.jcr?.nodeByPath;
                 expect(node?.name, 'permission node name').to.eq('provisioningApi');
                 expect(node?.primaryNodeType?.name, 'permission node type').to.eq('jnt:permission');
-                // Also pins the shipped tree shape (guards D5: README's jnt:permissionGroup divergence).
-                expect(node?.parent?.name, 'parent node name').to.eq('graphql');
+                // Flattened at /permissions — the shipped `graphql` grouping is NOT reflected here.
+                expect(node?.parent?.name, 'parent node name').to.eq('permissions');
                 expect(node?.parent?.primaryNodeType?.name, 'parent node type').to.eq('jnt:permission');
             });
     });
