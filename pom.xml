@@ -77,6 +77,22 @@
             <version>${mockito.version}</version>
             <scope>test</scope>
         </dependency>
+        <!--
+            Test-scope SLF4J binding so the U3 log-capture tests can attach a Logback
+            ListAppender to the ProvisioningAdminMutation logger and assert the
+            differentiated ERROR messages. The module itself ships no binding (the
+            platform provides one at runtime). The effective slf4j-api on the test
+            classpath is 2.0.7 (transitive, provided scope), which resolves bindings via
+            the ServiceLoader SLF4JServiceProvider mechanism — so we need Logback 1.3.x
+            (slf4j 2.0.x). Logback 1.2.x only ships the legacy StaticLoggerBinder and is
+            silently ignored by slf4j 2.x (falls back to a NOP logger).
+        -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.3.14</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

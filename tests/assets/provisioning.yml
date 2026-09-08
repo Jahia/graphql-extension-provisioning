@@ -7,4 +7,12 @@
   uninstallPreviousVersion: false
 - karafCommand: "log:log 'END - Install graphql-extension-provisioning dependencies'"
 
+# Open the API security profile for the disposable test container. Jahia's security-filter
+# closes ALL APIs (GraphQL/JCR) by default, which otherwise blocks the test session from
+# reaching the GraphQL layer at all (root JCR reads and non-root admin calls both surface as
+# GqlAccessDeniedException before any module-level check runs). Opening it lets the tests
+# exercise the module's OWN permission gates (@GraphQLRequiresPermission on the admin chain
+# and the provisioningApi leaf) rather than the outer security filter. Never for production.
+- karafCommand: "config:property-set -p org.jahia.bundles.api.security security.profile open"
+
 - karafCommand: "log:log 'END - provisioning'"

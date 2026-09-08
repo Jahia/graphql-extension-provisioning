@@ -37,7 +37,9 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Unit tests for {@link ProvisioningAdminMutation#executeScript(String)}.
@@ -48,6 +50,9 @@ import static org.mockito.Mockito.verify;
 public class ProvisioningMutationTest {
 
     private static final String VALID_SCRIPT = "- karafCommand: \"log:log 'test'\"";
+
+    private static final String MULTI_STEP_SCRIPT =
+            "- karafCommand: \"log:log 'step 1'\"\n- karafCommand: \"log:log 'step 2'\"";
 
     @Test
     public void executeScript_nullScript_returnsFalseWithoutTouchingService() {
@@ -163,6 +168,27 @@ public class ProvisioningMutationTest {
             new ProvisioningAdminMutation().executeScript("");
 
             verify(manager, never()).executeScript(any(String.class), any(String.class));
+        }
+    }
+
+    @Test
+    public void executeScript_multiStepScriptFails_delegatesOnceWithNoRetryOrRollback() throws Exception {
+        // U9: `true` means "no exception thrown"; on a partial multi-step failure the module
+        // performs exactly ONE delegation to ProvisioningManager — no retry, no compensation /
+        // rollback call, no per-step inspection (the void executeScript gives it nothing to inspect).
+        ProvisioningManager manager = mock(ProvisioningManager.class);
+        doThrow(new IOException("step 2 failed"))
+                .when(manager).executeScript(MULTI_STEP_SCRIPT, "yaml");
+
+        try (MockedStatic<BundleUtils> bundleUtils = mockStatic(BundleUtils.class)) {
+            bundleUtils.when(() -> BundleUtils.getOsgiService(ProvisioningManager.class, null))
+                    .thenReturn(manager);
+
+            Boolean result = new ProvisioningAdminMutation().executeScript(MULTI_STEP_SCRIPT);
+
+            assertThat(result).isFalse();
+            verify(manager, times(1)).executeScript(MULTI_STEP_SCRIPT, "yaml");
+            verifyNoMoreInteractions(manager);
         }
     }
 }
