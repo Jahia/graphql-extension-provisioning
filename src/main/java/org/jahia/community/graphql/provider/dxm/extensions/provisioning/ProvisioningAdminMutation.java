@@ -73,10 +73,17 @@ public class ProvisioningAdminMutation {
      *   </li>
      * </ul>
      *
-     * <p><strong>Required permission:</strong> {@code provisioningApi}
-     * (JCR path {@code /permissions/graphql/provisioningApi}).
-     * This permission is shipped by the module itself via its JCR import and is
-     * automatically created on first deployment.</p>
+     * <p><strong>Required permission:</strong> {@code provisioningAccess}, checked at the
+     * repository root. This is a <em>platform</em> permission, shipped by Jahia core at
+     * {@code /permissions/provisioningApi/provisioningAccess} — the same permission that gates
+     * core's own Provisioning API. This module deliberately does not declare a permission of its
+     * own: the capability it exposes is the provisioning API, so it gates on the permission that
+     * already governs it.</p>
+     *
+     * <p>Jahia grants {@code provisioningAccess} to the {@code system-administrator} role by
+     * default, including at the repository root, so that role can call this mutation. Because
+     * privilege aggregation runs downwards, a role granted the enclosing {@code provisioningApi}
+     * also satisfies this check.</p>
      *
      * <p><strong>Threading note:</strong> this method is synchronous. Long-running
      * provisioning scripts will block the GraphQL request thread for their full
@@ -87,7 +94,7 @@ public class ProvisioningAdminMutation {
      */
     @GraphQLField
     @GraphQLDescription("Execute a YAML provisioning script provided as a string")
-    @GraphQLRequiresPermission("provisioningApi")
+    @GraphQLRequiresPermission("provisioningAccess")
     public Boolean executeScript(
             @GraphQLName("script") @GraphQLDescription("YAML provisioning script content") String script
     ) {
