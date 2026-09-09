@@ -57,15 +57,13 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
     // control case is graphqlAdminMutation, declared nested by graphql-dxm-provider, which has NO
     // node anywhere under /permissions and enforces correctly.
     //
-    // WHAT IS NOT SETTLED, and why this assertion is weaker than it looks. Reading the platform
-    // source, a module cannot create a global /permissions child: permissions.xml ships inside
-    // META-INF/import.zip, so TemplatePackageDeployer excludes it from the targetPath="/" import and
-    // re-imports it into /modules/<id>/<version> only. Yet on a container created with
-    // `docker compose down -v` and a fresh `up`, with the module deployed and BEFORE any spec ran,
-    // the node was present. So something in the deploy path does create it, or the node has another
-    // source. Until that is explained this test may be asserting an artefact rather than a
-    // guarantee, and it would go red on an instance where that source is absent.
-    // Tracked in #26; do not harden any behaviour on this assertion in the meantime.
+    // WHAT THIS DOES NOT ESTABLISH. Reading the platform source, a module does not create a global
+    // /permissions child: permissions.xml ships inside META-INF/import.zip, so TemplatePackageDeployer
+    // excludes it from the targetPath="/" import and re-imports it into /modules/<id>/<version> only.
+    // The node was nonetheless present on a container created with `docker compose down -v` and a
+    // fresh `up`, with the module deployed and before any spec ran. So this assertion is about a node
+    // whose source is not identified here; treat it as a smoke check on grantability, not as a
+    // statement about where the module puts things.
     const permissionNode = gql`
         query {
             jcr(workspace: EDIT) {
