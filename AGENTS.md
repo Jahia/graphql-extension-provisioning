@@ -72,7 +72,13 @@ yarn install
 - A failure is signalled by `false`, never by a GraphQL error. The client cannot tell a YAML parse error
   from a runtime one; the distinction is in the server log
 - The mutation is synchronous, so a long-running script blocks the GraphQL request thread
-- Every call is audited at INFO with the caller, the outcome, and a SHA-256 digest of the script. The
-  raw script is never logged, because provisioning YAML can carry credentials
-- This repo has no CI. Neither test suite runs automatically, and `tests/ci.startup.sh` exits 0 even
-  when tests fail, so run them by hand and read the summary rather than the exit status
+- A call that REACHES `ProvisioningManager.executeScript` is audited at INFO with the caller, the
+  outcome, and a SHA-256 digest of the script. Both outcomes are covered, success and caught failure.
+  The earlier returns are not: a null or blank script, and an unavailable or throwing
+  `ProvisioningManager`, log ERROR and emit no audit line. The raw script is never logged, because
+  provisioning YAML can carry credentials
+- This repo has no CI, so neither test suite runs automatically. Run them by hand and read the
+  Cypress summary rather than the exit status: across four local runs on 2026-09-08, `ci.startup.sh`
+  returned 0 every time, including one run with 10 failures and two where no test executed. The
+  script's last command is `npx @jahia/cypress ci.startup`, so the status comes from that package
+  rather than from anything in this repo. See #23

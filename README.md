@@ -41,7 +41,20 @@ Administration > JCR Browser:
 
 This mirrors what `src/main/import/permissions.xml` ships, including the `graphql` node
 and its `jnt:permission` type. Keep the nesting: it is what makes `graphql` an aggregate
-of `provisioningApi`.
+of `provisioningApi`. Use `jnt:permission` for both nodes — `jnt:permissionGroup` is not a
+Jahia node type, and an import naming it fails.
+
+**Why this works even though the module writes elsewhere.** Jahia registers privileges into
+one in-memory map, from two sources: the global `/permissions` tree, read at startup and
+refreshed by `PrivilegesListener`, and each module's own subtree, read by
+`addModulePrivileges`. Enforcement only ever consults that map, by name — a JCR node is an
+input to registration, never what the gate reads. So the module registering from
+`/modules/<id>/<version>/permissions` and this fallback writing under `/permissions` both
+produce the same effective `provisioningApi` privilege.
+
+One rider if you use the fallback: the `graphql` node it creates is *global*. Privileges are
+deduplicated by name, so it merges with any other module's top-level `graphql` node rather
+than conflicting. Granting `graphql` may therefore aggregate more than this module's leaf.
 
 #### Recommended role assignment
 
@@ -63,9 +76,10 @@ tree, so a path-based check against that location finds nothing.
 
 ### Recommended network controls
 
-In addition to the permission gate, consider restricting the GraphQL admin endpoint
-(`/graphql`) at the network or reverse-proxy level so it is not reachable from the
-public internet.
+In addition to the permission gate, consider restricting the GraphQL endpoint
+(`/modules/graphql`) at the network or reverse-proxy level so it is not reachable from the
+public internet. Note the path: a rule written against `/graphql` matches nothing, because
+that is not where Jahia serves the API.
 
 ## Installation
 

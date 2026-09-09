@@ -9,7 +9,8 @@ import gql from 'graphql-tag';
  *   D1 — the documented flat path is a GraphQL VALIDATION error; the nested path is ground truth.
  *   F6 — `ProvisioningAdminMutation` exposes exactly one field `executeScript(script: String): Boolean`,
  *        and `JahiaAdminMutation` carries a `provisioning` field of that type.
- *   F3 — the module's JCR import created `/permissions/graphql/provisioningApi` (both nodes jnt:permission).
+ *   F3 — a grantable `provisioningApi` permission is reachable at `/permissions/provisioningApi`.
+ *        See the comment on the query below: what CREATES that node is not settled.
  *   F7 — install/start smoke: the type being present in the schema ⇒ the bundle is ACTIVE and its
  *        DS component registered the GraphQL contribution.
  */
@@ -44,12 +45,27 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         }
     `;
 
-    // F3: the module ships src/main/import/permissions.xml nesting provisioningApi UNDER a
-    // `graphql` group node, but Jahia registers module permissions FLAT by name at runtime —
-    // the live node is /permissions/provisioningApi (parent /permissions), and no
-    // /permissions/graphql grouping node is created (confirmed live in Stage 6). The module's
-    // own template copy lives under /modules/<module>/<version>/permissions/graphql/provisioningApi,
-    // but the effective, grantable permission is the flattened /permissions/provisioningApi.
+    // F3: asserts that a grantable `provisioningApi` permission node exists at
+    // /permissions/provisioningApi, with parent /permissions.
+    //
+    // WHAT IS SETTLED. The module declares the permission nested, in
+    // src/main/import/permissions.xml, and that shape is preserved in the module's own subtree at
+    // /modules/<module>/<version>/permissions/graphql/provisioningApi. No /permissions/graphql node
+    // exists in the global tree. Enforcement does not read either location: JahiaPrivilegeRegistry
+    // keeps one in-memory map keyed by privilege NAME, fed from the global /permissions tree and from
+    // each module's subtree, so `provisioningApi` resolves regardless of where a node sits. The
+    // control case is graphqlAdminMutation, declared nested by graphql-dxm-provider, which has NO
+    // node anywhere under /permissions and enforces correctly.
+    //
+    // WHAT IS NOT SETTLED, and why this assertion is weaker than it looks. Reading the platform
+    // source, a module cannot create a global /permissions child: permissions.xml ships inside
+    // META-INF/import.zip, so TemplatePackageDeployer excludes it from the targetPath="/" import and
+    // re-imports it into /modules/<id>/<version> only. Yet on a container created with
+    // `docker compose down -v` and a fresh `up`, with the module deployed and BEFORE any spec ran,
+    // the node was present. So something in the deploy path does create it, or the node has another
+    // source. Until that is explained this test may be asserting an artefact rather than a
+    // guarantee, and it would go red on an instance where that source is absent.
+    // Tracked in #26; do not harden any behaviour on this assertion in the meantime.
     const permissionNode = gql`
         query {
             jcr(workspace: EDIT) {
