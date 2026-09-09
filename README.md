@@ -15,7 +15,7 @@ shell access to the server.**
 
 Access is gated by `@GraphQLRequiresPermission("provisioningApi")`. This is a **custom
 Jahia permission** that is **shipped by this module** — it is created automatically in
-the JCR at path `/permissions/graphql/provisioningApi` when the module is first deployed
+the JCR at path `/permissions/provisioningApi` when the module is first deployed
 (or when it is deployed with a new version). It grants **no access by default** until
 you assign it to one or more roles.
 
@@ -27,14 +27,16 @@ Administration > JCR Browser:
 
 ```xml
 <permissions jcr:primaryType="jnt:permission">
-  <graphql jcr:primaryType="jnt:permissionGroup">
-    <provisioningApi jcr:primaryType="jnt:permission"/>
-  </graphql>
+  <provisioningApi jcr:primaryType="jnt:permission"/>
 </permissions>
 ```
 
 The full JCR path of the permission once created will be:
-`/permissions/graphql/provisioningApi`
+`/permissions/provisioningApi`
+
+Note that `src/main/import/permissions.xml` nests `provisioningApi` under a `graphql`
+node, but Jahia registers module permissions flat by name. The grouping node is not
+created, so the effective, grantable permission is `/permissions/provisioningApi`.
 
 #### Recommended role assignment
 
@@ -50,8 +52,8 @@ Assign the `provisioningApi` permission **only** to the `server-administrator` r
 #### Verifying the permission is in place
 
 In the Jahia Administration panel, go to **Administration > Roles & permissions** and
-confirm `provisioningApi` appears under the `graphql` permission group, and that only
-the intended roles have it.
+confirm `provisioningApi` is listed, and that only the intended roles have it. It is
+listed on its own, not under a `graphql` group.
 
 ### Recommended network controls
 
@@ -76,7 +78,9 @@ Provide a YAML provisioning script directly as a string:
 mutation {
     admin {
         jahia {
-            executeScript(script: "- installBundle: \"mvn:org.jahia.modules/article/3.2.0\"")
+            provisioning {
+                executeScript(script: "- installBundle: \"mvn:org.jahia.modules/article/3.2.0\"")
+            }
         }
     }
 }
@@ -98,7 +102,8 @@ Refer to the [Jahia Provisioning API documentation](https://academy.jahia.com/do
 | Class | Role |
 |-------|------|
 | `DXGraphQLExtensionProvisioningProvider` | OSGi DS `@Component` that registers `ProvisioningMutation` with the DXM GraphQL provider via `DXGraphQLExtensionsProvider` |
-| `ProvisioningMutation` | `@GraphQLTypeExtension(GqlJahiaAdminMutation.class)` — adds the `executeScript` field under `admin.jahia` |
+| `ProvisioningMutation` | `@GraphQLTypeExtension(GqlJahiaAdminMutation.class)` — adds the `provisioning` field under `admin.jahia` |
+| `ProvisioningAdminMutation` | The type `provisioning` returns; carries `executeScript`, gated by `@GraphQLRequiresPermission("provisioningApi")` |
 
 ## Troubleshooting
 
