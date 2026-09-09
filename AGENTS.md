@@ -25,8 +25,9 @@ Extends `GqlJahiaAdminMutation` (accessed via `admin.jahia`):
 |-----------|------|-------|
 | Mutation | `admin.jahia.provisioning.executeScript(script: String)` → Boolean | Executes YAML via `ProvisioningManager`; returns `false` on failure |
 
-Permission: `provisioningApi`, checked at the JCR root. The permission registers flat, at
-`/permissions/provisioningApi`. Reaching the field also needs the ancestor grants that gate every
+Permission: `provisioningApi`, checked at the JCR root. Jahia registers privileges by name from the
+module's own tree (`/modules/<id>/<version>/permissions/graphql/provisioningApi`); there is no
+`/permissions/graphql/provisioningApi` node. Reaching the field also needs the ancestor grants that gate every
 admin mutation: `jcr:read` on `/jcr:system` for `admin`, and `graphqlAdminMutation` at `/` for
 `admin.jahia`.
 

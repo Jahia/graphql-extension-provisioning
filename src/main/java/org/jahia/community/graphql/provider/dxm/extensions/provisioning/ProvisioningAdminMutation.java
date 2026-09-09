@@ -74,7 +74,7 @@ public class ProvisioningAdminMutation {
      * </ul>
      *
      * <p><strong>Required permission:</strong> {@code provisioningApi}
-     * (JCR path {@code /permissions/provisioningApi}).
+     * (registered by name; declared at {@code <module>/permissions/graphql/provisioningApi}).
      * This permission is shipped by the module itself via its JCR import and is
      * automatically created on first deployment.</p>
      *

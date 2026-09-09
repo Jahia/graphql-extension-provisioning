@@ -14,10 +14,16 @@ shell access to the server.**
 ### The `provisioningApi` permission
 
 Access is gated by `@GraphQLRequiresPermission("provisioningApi")`. This is a **custom
-Jahia permission** that is **shipped by this module** — it is created automatically in
-the JCR at path `/permissions/provisioningApi` when the module is first deployed
-(or when it is deployed with a new version). It grants **no access by default** until
-you assign it to one or more roles.
+Jahia permission** that is **shipped by this module** — it is registered automatically
+when the module is first deployed (or when it is deployed with a new version). It grants
+**no access by default** until you assign it to one or more roles.
+
+The permission is declared by `src/main/import/permissions.xml` and lives in the module's
+own tree, at `/modules/graphql-extension-provisioning/<version>/permissions/graphql/provisioningApi`.
+Jahia registers privileges by **name**, so the name to grant is `provisioningApi`, and the
+gate checks it at the repository root. Note that the enclosing `graphql` node is itself a
+permission: Jahia aggregates downwards, so granting `graphql` implies `provisioningApi`,
+while granting `provisioningApi` does not imply `graphql`.
 
 #### Declaring the permission in JCR (manual fallback)
 
@@ -27,16 +33,15 @@ Administration > JCR Browser:
 
 ```xml
 <permissions jcr:primaryType="jnt:permission">
-  <provisioningApi jcr:primaryType="jnt:permission"/>
+  <graphql jcr:primaryType="jnt:permission">
+    <provisioningApi jcr:primaryType="jnt:permission"/>
+  </graphql>
 </permissions>
 ```
 
-The full JCR path of the permission once created will be:
-`/permissions/provisioningApi`
-
-Note that `src/main/import/permissions.xml` nests `provisioningApi` under a `graphql`
-node, but Jahia registers module permissions flat by name. The grouping node is not
-created, so the effective, grantable permission is `/permissions/provisioningApi`.
+This mirrors what `src/main/import/permissions.xml` ships, including the `graphql` node
+and its `jnt:permission` type. Keep the nesting: it is what makes `graphql` an aggregate
+of `provisioningApi`.
 
 #### Recommended role assignment
 
@@ -52,8 +57,9 @@ Assign the `provisioningApi` permission **only** to the `server-administrator` r
 #### Verifying the permission is in place
 
 In the Jahia Administration panel, go to **Administration > Roles & permissions** and
-confirm `provisioningApi` is listed, and that only the intended roles have it. It is
-listed on its own, not under a `graphql` group.
+confirm `provisioningApi` is listed, and that only the intended roles have it. Look for it
+by name: there is no `/permissions/graphql/provisioningApi` node in the global permission
+tree, so a path-based check against that location finds nothing.
 
 ### Recommended network controls
 
