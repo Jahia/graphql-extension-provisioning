@@ -1,6 +1,6 @@
 describe('GraphQL Extension Provisioning - Authorization', () => {
     // A script that would succeed for a privileged user; used to confirm it is
-    // NOT executed when the caller lacks the provisioningApi permission.
+    // NOT executed when the caller lacks the provisioningAccess permission.
     const script = '- karafCommand: "log:log \'graphql-extension-provisioning auth-test — MUST NOT RUN\'"'
 
     const query = 'mutation ($script: String!) { admin { jahia { provisioning { executeScript(script: $script) } } } }'

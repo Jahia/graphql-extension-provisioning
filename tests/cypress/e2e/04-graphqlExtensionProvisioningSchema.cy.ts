@@ -9,7 +9,8 @@ import gql from 'graphql-tag';
  *   D1 — the documented flat path is a GraphQL VALIDATION error; the nested path is ground truth.
  *   F6 — `ProvisioningAdminMutation` exposes exactly one field `executeScript(script: String): Boolean`,
  *        and `JahiaAdminMutation` carries a `provisioning` field of that type.
- *   F3 — the module's JCR import created `/permissions/graphql/provisioningApi` (both nodes jnt:permission).
+ *   F3 — the module ships NO permission of its own, and the CORE permission it gates on is present
+ *        at `/permissions/provisioningApi/provisioningAccess`.
  *   F7 — install/start smoke: the type being present in the schema ⇒ the bundle is ACTIVE and its
  *        DS component registered the GraphQL contribution.
  */
@@ -44,19 +45,37 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         }
     `;
 
-    // F3: the module ships src/main/import/permissions.xml nesting provisioningApi UNDER a
-    // `graphql` group node, but Jahia registers module permissions FLAT by name at runtime —
-    // the live node is /permissions/provisioningApi (parent /permissions), and no
-    // /permissions/graphql grouping node is created (confirmed live in Stage 6). The module's
-    // own template copy lives under /modules/<module>/<version>/permissions/graphql/provisioningApi,
-    // but the effective, grantable permission is the flattened /permissions/provisioningApi.
-    const permissionNode = gql`
+    // F3: this module gates on a CORE permission and declares none of its own.
+    //
+    // Jahia ships `provisioningAccess` at /permissions/provisioningApi/provisioningAccess, where
+    // `provisioningApi` is a grouping node and `provisioningAccess` is the grantable permission —
+    // the same one that gates core's Provisioning API. Registration is by NAME into
+    // JahiaPrivilegeRegistry's in-memory map, so a module redeclaring that name would contribute
+    // nothing to the privilege while creating a second, differently named parent above it. A parent
+    // is an aggregate, so such a node becomes an extra grant path to an RCE-equivalent capability.
+    //
+    // Both halves are asserted, because each fails in a different direction: losing the core node
+    // means the gate can never be satisfied by a grant, and gaining a module-local declaration
+    // means the duplicate has been reintroduced.
+    const corePermission = gql`
         query {
             jcr(workspace: EDIT) {
-                nodeByPath(path: "/permissions/provisioningApi") {
+                nodeByPath(path: "/permissions/provisioningApi/provisioningAccess") {
                     name
                     primaryNodeType { name }
-                    parent { name primaryNodeType { name } }
+                    parent { name }
+                }
+            }
+        }
+    `;
+
+    const modulePermissions = gql`
+        query {
+            jcr(workspace: EDIT) {
+                nodesByQuery(
+                    query: "select * from [jnt:permission] where isdescendantnode('/modules/graphql-extension-provisioning')"
+                ) {
+                    nodes { path }
                 }
             }
         }
@@ -124,20 +143,39 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         });
     });
 
-    it('F3 — the module registered a grantable provisioningApi permission at /permissions/provisioningApi (jnt:permission)', () => {
-        cy.apollo({query: permissionNode, errorPolicy: 'all'})
+    it('F3 — the core provisioningAccess permission is present under the provisioningApi group', () => {
+        cy.apollo({query: corePermission, errorPolicy: 'all'})
             .then((result: {
-                data?: {jcr?: {nodeByPath?: {name: string; primaryNodeType: {name: string}; parent: {name: string; primaryNodeType: {name: string}}}}};
+                data?: {jcr?: {nodeByPath?: {name: string; primaryNodeType: {name: string}; parent: {name: string}}}};
                 errors?: Array<{message: string}>;
             }) => {
-                expect(result.errors ?? [], `permission node lookup must not error [${(result.errors ?? []).map(e => e.message).join(' | ')}]`)
+                expect(result.errors ?? [], `core permission lookup must not error [${(result.errors ?? []).map(e => e.message).join(' | ')}]`)
                     .to.have.length(0);
                 const node = result.data?.jcr?.nodeByPath;
-                expect(node?.name, 'permission node name').to.eq('provisioningApi');
+                expect(node?.name, 'the grantable permission').to.eq('provisioningAccess');
                 expect(node?.primaryNodeType?.name, 'permission node type').to.eq('jnt:permission');
-                // Flattened at /permissions — the shipped `graphql` grouping is NOT reflected here.
-                expect(node?.parent?.name, 'parent node name').to.eq('permissions');
-                expect(node?.parent?.primaryNodeType?.name, 'parent node type').to.eq('jnt:permission');
+                expect(node?.parent?.name, 'declared under the provisioningApi group').to.eq('provisioningApi');
+            });
+    });
+
+    it('F3 — the module declares no permission of its own', () => {
+        cy.apollo({query: modulePermissions, errorPolicy: 'all'})
+            .then((result: {
+                data?: {jcr?: {nodesByQuery?: {nodes: Array<{path: string}>}}};
+                errors?: Array<{message: string}>;
+            }) => {
+                expect(result.errors ?? [], 'module subtree lookup must not error').to.have.length(0);
+                const paths = (result.data?.jcr?.nodesByQuery?.nodes ?? []).map(n => n.path);
+
+                // Jahia creates `permissions` and `permissions/templates` under EVERY module, with or
+                // without a permissions.xml, so their presence says nothing. What must not appear is a
+                // declaration of the permission this module gates on, or of a parent above it.
+                const reintroduced = paths.filter(path => /\/(provisioningAccess|provisioningApi|graphql)$/.test(path));
+
+                // Redeclaring a platform permission adds nothing to the privilege and creates an
+                // unintended aggregate above it. If this fails, src/main/import/permissions.xml is back.
+                expect(reintroduced, `the module must declare no provisioning permission; found ${JSON.stringify(reintroduced)}`)
+                    .to.have.length(0);
             });
     });
 });

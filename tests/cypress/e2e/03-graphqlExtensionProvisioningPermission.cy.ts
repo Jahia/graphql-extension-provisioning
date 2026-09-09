@@ -10,22 +10,27 @@ import {createUser, deleteUser, grantRoles, addNode, deleteNode} from '@jahia/cy
  *   1. `admin`        → @GraphQLRequiresPermission("jcr:read/jcr:system")  → jcr:read on /jcr:system
  *   2. `admin.jahia`  → @GraphQLRequiresPermission("graphqlAdminMutation") → graphqlAdminMutation at /
  *   3. `provisioning` → (ungated container)
- *   4. `executeScript`→ @GraphQLRequiresPermission("provisioningApi")      → provisioningApi at /
+ *   4. `executeScript`→ @GraphQLRequiresPermission("provisioningAccess")   → provisioningAccess at /
  * Every check resolves against the CALLING user's own JCR session; the leaf and the
  * graphqlAdminMutation checks hardcode the repository ROOT ("/") because the permission name
  * carries no path, so ONLY a server-level (root) grant satisfies them — a grant at any non-root
  * node (e.g. a site) is fail-closed. `jcr:read/jcr:system` embeds its own path (/jcr:system).
  *
- * So provisioningApi-at-root is NECESSARY BUT NOT SUFFICIENT: a caller also needs the ancestor
+ * The leaf permission is CORE's, declared at /permissions/provisioningApi/provisioningAccess and
+ * granted to system-administrator by default; this module declares no permission of its own.
+ * So provisioningAccess-at-root is NECESSARY BUT NOT SUFFICIENT: a caller also needs the ancestor
  * grants to even reach the leaf. These tests pin every load-bearing edge of that contract with
  * NON-root users:
  *   F2a — an authenticated user with NO grants is denied and the script is NOT executed.
  *   F2a — aliasing the leaf field does not bypass the gate (lookup keys on field name, not alias).
- *   U6  — a caller holding the ancestor grants but NOT provisioningApi CAN select the ungated
+ *   U6  — a caller holding the ancestor grants but NOT provisioningAccess CAN select the ungated
  *         `provisioning` container (__typename) yet is DENIED on executeScript — proving the leaf
  *         gate is specifically on executeScript, not on the container.
+ *   BC  — a caller granted the ENCLOSING `provisioningApi` group instead of the leaf still succeeds,
+ *         because privilege aggregation runs downwards. This is what keeps deployments that granted
+ *         `provisioningApi` for an earlier release of this module working after the switch.
  *   F2b — a caller holding the full chain at ROOT succeeds; and the security-critical negative:
- *         the same caller with provisioningApi granted only at a SITE (ancestors still at root)
+ *         the same caller with provisioningAccess granted only at a SITE (ancestors still at root)
  *         is DENIED — proving the leaf's hardcoded root-node check is fail-closed for site grants.
  *
  * IMPORTANT: `cy.apollo` authenticates as `root` by default. To exercise the permission checks we
@@ -38,11 +43,14 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
     const ANCESTOR_ROLE = 'provisioning-ancestor-tester';
     // The leaf permission under test, isolated in its own role so its grant location can vary.
     const LEAF_ROLE = 'provisioning-leaf-tester';
+    // The enclosing group core declares above the leaf; granting it must imply the leaf.
+    const GROUP_ROLE = 'provisioning-group-tester';
 
     const DENIED_USER = 'provisioning-denied-user';
     const ANCESTOR_USER = 'provisioning-ancestor-user';
     const FULL_USER = 'provisioning-full-user';
     const SITE_USER = 'provisioning-site-user';
+    const GROUP_USER = 'provisioning-group-user';
     const PASSWORD = 'Provisioning9PwdTest';
 
     // A non-root node that always exists — used for the fail-closed "leaf granted at a site" case.
@@ -83,7 +91,7 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
         cy.login(); // Root
 
         // Ancestor role: the two permissions gating admin (jcr:read on /jcr:system) and admin.jahia
-        // (graphqlAdminMutation). NOT provisioningApi.
+        // (graphqlAdminMutation). NOT provisioningAccess.
         addNode({
             parentPathOrId: '/roles',
             primaryNodeType: 'jnt:role',
@@ -95,11 +103,25 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
                 {name: 'j:privilegedAccess', value: 'true', type: 'BOOLEAN'}
             ]
         });
-        // Leaf role: ONLY provisioningApi, so we can vary WHERE it is granted (root vs site).
+        // Leaf role: ONLY provisioningAccess, so we can vary WHERE it is granted (root vs site).
         addNode({
             parentPathOrId: '/roles',
             primaryNodeType: 'jnt:role',
             name: LEAF_ROLE,
+            properties: [
+                {name: 'j:permissionNames', values: ['provisioningAccess'], type: 'STRING'},
+                {name: 'j:roleGroup', value: 'server-role', type: 'STRING'},
+                {name: 'j:nodeTypes', values: ['rep:root'], type: 'STRING'},
+                {name: 'j:privilegedAccess', value: 'true', type: 'BOOLEAN'}
+            ]
+        });
+
+        // Group role: the enclosing `provisioningApi` that core declares ABOVE provisioningAccess.
+        // Granting a parent must imply its children, so this caller should reach the leaf.
+        addNode({
+            parentPathOrId: '/roles',
+            primaryNodeType: 'jnt:role',
+            name: GROUP_ROLE,
             properties: [
                 {name: 'j:permissionNames', values: ['provisioningApi'], type: 'STRING'},
                 {name: 'j:roleGroup', value: 'server-role', type: 'STRING'},
@@ -112,16 +134,20 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
         createUser(ANCESTOR_USER, PASSWORD);
         createUser(FULL_USER, PASSWORD);
         createUser(SITE_USER, PASSWORD);
+        createUser(GROUP_USER, PASSWORD);
 
-        // ANCESTOR_USER: ancestor grants at root, but NO provisioningApi anywhere.
+        // ANCESTOR_USER: ancestor grants at root, but NO provisioningAccess anywhere.
         grantRoles('/', [ANCESTOR_ROLE], ANCESTOR_USER, 'USER');
         // FULL_USER: full chain at root → authorized.
         grantRoles('/', [ANCESTOR_ROLE], FULL_USER, 'USER');
         grantRoles('/', [LEAF_ROLE], FULL_USER, 'USER');
-        // SITE_USER: ancestors at root (so it reaches the leaf) but provisioningApi only at a SITE
+        // SITE_USER: ancestors at root (so it reaches the leaf) but provisioningAccess only at a SITE
         // → must still be denied, isolating the leaf's root-only requirement.
         grantRoles('/', [ANCESTOR_ROLE], SITE_USER, 'USER');
         grantRoles(SITE_NODE, [LEAF_ROLE], SITE_USER, 'USER');
+        // GROUP_USER: ancestors at root, plus the enclosing group instead of the leaf itself.
+        grantRoles('/', [ANCESTOR_ROLE], GROUP_USER, 'USER');
+        grantRoles('/', [GROUP_ROLE], GROUP_USER, 'USER');
     });
 
     after(() => {
@@ -131,8 +157,10 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
         deleteUser(ANCESTOR_USER);
         deleteUser(FULL_USER);
         deleteUser(SITE_USER);
+        deleteUser(GROUP_USER);
         deleteNode(`/roles/${ANCESTOR_ROLE}`);
         deleteNode(`/roles/${LEAF_ROLE}`);
+        deleteNode(`/roles/${GROUP_ROLE}`);
     });
 
     it('F2a — denies an authenticated user with NO grants and does NOT execute the script', () => {
@@ -158,7 +186,7 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
             });
     });
 
-    it('U6 — a caller with ancestor grants but no provisioningApi CAN select the container but is DENIED on executeScript', () => {
+    it('U6 — a caller with ancestor grants but no provisioningAccess CAN select the container but is DENIED on executeScript', () => {
         // Can select the ungated container (proves ancestors are satisfied and the container itself
         // is not gated)...
         cy.apolloClient({username: ANCESTOR_USER, password: PASSWORD})
@@ -190,11 +218,27 @@ describe('GraphQL Extension Provisioning — permission gate (non-root users)', 
             });
     });
 
-    it('F2b — provisioningApi granted only at a SITE still denies (leaf root-only check)', () => {
+    it('BC — granting the enclosing provisioningApi group still reaches the leaf (downward aggregation)', () => {
+        cy.apolloClient({username: GROUP_USER, password: PASSWORD})
+            .apollo({mutation: executeScript, variables: {script: GRANTED_MARKER}, errorPolicy: 'all'})
+            .then((result: DenialResult) => {
+                // Aggregation expands a granted privilege through its children, so `provisioningApi`
+                // satisfies a `provisioningAccess` check. Deployments that granted the group for an
+                // earlier release keep working; this test is what says so.
+                expect(result.errors ?? [], `group-granted caller must have no errors [${messagesOf(result)}]`)
+                    .to.have.length(0);
+                expect(
+                    result.data?.admin?.jahia?.provisioning?.executeScript,
+                    'a caller granted the enclosing group must execute the script'
+                ).to.eq(true);
+            });
+    });
+
+    it('F2b — provisioningAccess granted only at a SITE still denies (leaf root-only check)', () => {
         cy.apolloClient({username: SITE_USER, password: PASSWORD})
             .apollo({mutation: executeScript, variables: {script: DENIED_MARKER}, errorPolicy: 'all'})
             .then((result: DenialResult) => {
-                // Fail-closed: provisioningApi is resolved on "/", so a site-scoped grant does not
+                // Fail-closed: provisioningAccess is resolved on "/", so a site-scoped grant does not
                 // satisfy it even though this caller passes the ancestor gates at root.
                 expect(messagesOf(result), 'site-level leaf grant must not unlock the mutation').to.contain('Permission denied');
                 expect(result.data?.admin?.jahia?.provisioning?.executeScript ?? null).to.be.null;
