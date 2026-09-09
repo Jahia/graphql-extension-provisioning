@@ -9,8 +9,8 @@ import gql from 'graphql-tag';
  *   D1 — the documented flat path is a GraphQL VALIDATION error; the nested path is ground truth.
  *   F6 — `ProvisioningAdminMutation` exposes exactly one field `executeScript(script: String): Boolean`,
  *        and `JahiaAdminMutation` carries a `provisioning` field of that type.
- *   F3 — a grantable `provisioningApi` permission is reachable at `/permissions/provisioningApi`.
- *        See the comment on the query below: what CREATES that node is not settled.
+ *   F3 — the module ships its permission, nested as declared, in its own subtree:
+ *        `/modules/<module>/<version>/permissions/graphql/provisioningApi`.
  *   F7 — install/start smoke: the type being present in the schema ⇒ the bundle is ACTIVE and its
  *        DS component registered the GraphQL contribution.
  */
@@ -45,32 +45,37 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         }
     `;
 
-    // F3: asserts that a grantable `provisioningApi` permission node exists at
-    // /permissions/provisioningApi, with parent /permissions.
+    // F3: the module ships src/main/import/permissions.xml, and Jahia preserves the declared shape
+    // in the module's OWN subtree, at
+    // /modules/graphql-extension-provisioning/<version>/permissions/graphql/provisioningApi.
     //
-    // WHAT IS SETTLED. The module declares the permission nested, in
-    // src/main/import/permissions.xml, and that shape is preserved in the module's own subtree at
-    // /modules/<module>/<version>/permissions/graphql/provisioningApi. No /permissions/graphql node
-    // exists in the global tree. Enforcement does not read either location: JahiaPrivilegeRegistry
+    // Why this subtree and not /permissions. Enforcement never reads a JCR node: JahiaPrivilegeRegistry
     // keeps one in-memory map keyed by privilege NAME, fed from the global /permissions tree and from
-    // each module's subtree, so `provisioningApi` resolves regardless of where a node sits. The
-    // control case is graphqlAdminMutation, declared nested by graphql-dxm-provider, which has NO
-    // node anywhere under /permissions and enforces correctly.
+    // each module's subtree, and the gate resolves `provisioningApi` out of that map. A module does not
+    // create a global /permissions child — permissions.xml ships inside META-INF/import.zip, so
+    // TemplatePackageDeployer excludes it from the targetPath="/" import and re-imports it into
+    // /modules/<id>/<version> only. The control case is graphqlAdminMutation, which graphql-dxm-provider
+    // declares nested under `admin` and which has NO node anywhere under /permissions, yet enforces.
     //
-    // WHAT THIS DOES NOT ESTABLISH. Reading the platform source, a module does not create a global
-    // /permissions child: permissions.xml ships inside META-INF/import.zip, so TemplatePackageDeployer
-    // excludes it from the targetPath="/" import and re-imports it into /modules/<id>/<version> only.
-    // The node was nonetheless present on a container created with `docker compose down -v` and a
-    // fresh `up`, with the module deployed and before any spec ran. So this assertion is about a node
-    // whose source is not identified here; treat it as a smoke check on grantability, not as a
-    // statement about where the module puts things.
-    const permissionNode = gql`
+    // The nesting is load-bearing, which is why this asserts the parent too: registerPrivileges makes
+    // each child an aggregate sub-privilege of its parent, so `graphql` aggregates `provisioningApi`.
+    // Granting `graphql` satisfies a `provisioningApi` check; granting `provisioningApi` does not imply
+    // `graphql`. Dropping the nesting would silently change who can reach the RCE-equivalent mutation.
+    //
+    // Queried by descendant search rather than an absolute path so the assertion survives a version
+    // bump instead of breaking on it.
+    const modulePermissions = gql`
         query {
             jcr(workspace: EDIT) {
-                nodeByPath(path: "/permissions/provisioningApi") {
-                    name
-                    primaryNodeType { name }
-                    parent { name primaryNodeType { name } }
+                nodesByQuery(
+                    query: "select * from [jnt:permission] where isdescendantnode('/modules/graphql-extension-provisioning')"
+                ) {
+                    nodes {
+                        path
+                        name
+                        primaryNodeType { name }
+                        parent { name }
+                    }
                 }
             }
         }
@@ -138,20 +143,28 @@ describe('GraphQL Extension Provisioning — schema shape & deployment', () => {
         });
     });
 
-    it('F3 — the module registered a grantable provisioningApi permission at /permissions/provisioningApi (jnt:permission)', () => {
-        cy.apollo({query: permissionNode, errorPolicy: 'all'})
+    it('F3 — the module ships provisioningApi nested under graphql in its own subtree', () => {
+        cy.apollo({query: modulePermissions, errorPolicy: 'all'})
             .then((result: {
-                data?: {jcr?: {nodeByPath?: {name: string; primaryNodeType: {name: string}; parent: {name: string; primaryNodeType: {name: string}}}}};
+                data?: {jcr?: {nodesByQuery?: {nodes: Array<{path: string; name: string; primaryNodeType: {name: string}; parent: {name: string}}>}}};
                 errors?: Array<{message: string}>;
             }) => {
-                expect(result.errors ?? [], `permission node lookup must not error [${(result.errors ?? []).map(e => e.message).join(' | ')}]`)
+                expect(result.errors ?? [], `permission lookup must not error [${(result.errors ?? []).map(e => e.message).join(' | ')}]`)
                     .to.have.length(0);
-                const node = result.data?.jcr?.nodeByPath;
-                expect(node?.name, 'permission node name').to.eq('provisioningApi');
-                expect(node?.primaryNodeType?.name, 'permission node type').to.eq('jnt:permission');
-                // Flattened at /permissions — the shipped `graphql` grouping is NOT reflected here.
-                expect(node?.parent?.name, 'parent node name').to.eq('permissions');
-                expect(node?.parent?.primaryNodeType?.name, 'parent node type').to.eq('jnt:permission');
+
+                const nodes = result.data?.jcr?.nodesByQuery?.nodes ?? [];
+                const leaf = nodes.find(n => n.path.endsWith('/permissions/graphql/provisioningApi'));
+
+                expect(leaf, `provisioningApi must be shipped under a graphql node; got ${JSON.stringify(nodes.map(n => n.path))}`)
+                    .to.not.equal(undefined);
+                expect(leaf?.name, 'leaf name').to.eq('provisioningApi');
+                expect(leaf?.primaryNodeType?.name, 'leaf type').to.eq('jnt:permission');
+                // The aggregate parent: granting `graphql` must keep implying `provisioningApi`.
+                expect(leaf?.parent?.name, 'the declared graphql grouping must survive deployment').to.eq('graphql');
+
+                const group = nodes.find(n => n.path.endsWith('/permissions/graphql'));
+                expect(group?.primaryNodeType?.name, 'graphql node type — jnt:permissionGroup is not a Jahia type')
+                    .to.eq('jnt:permission');
             });
     });
 });
