@@ -70,6 +70,11 @@
   },
   "homepage": "https://github.com/Jahia/graphql-extension-provisioning#readme",
   "resolutions": {
+    "**/istanbul-lib-processinfo/rimraf/glob/minimatch": "^11.0.1",
+    "**/nyc/glob/minimatch": "^11.0.1",
+    "**/nyc/test-exclude/glob/minimatch": "^11.0.1",
+    "**/nyc/test-exclude/minimatch": "^11.0.1",
+    "**/spawn-wrap/rimraf/glob/minimatch": "^11.0.1",
     "@babel/core": "^7.29.6",
     "@babel/plugin-transform-modules-systemjs": "^7.29.4",
     "axios": "^1.20.0",
